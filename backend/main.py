@@ -3,11 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from ai import document_handler_agent
 from database.config import get_db_connection
 from prisma import Client
-
+from pydantic import BaseModel
 
 app = FastAPI()
-
-# app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -17,8 +15,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class DocumentInput(BaseModel):
+    doc: str
+
 @app.post("/documents/")
-async def process_document(doc: str, db: Client = Depends(get_db_connection)):
+async def process_document(input: DocumentInput, db: Client = Depends(get_db_connection)):
+    doc = input.doc
+    print("Processing document:", doc)
     initial_state = {
         "document": doc,
         "messages": []
@@ -33,6 +36,17 @@ async def process_document(doc: str, db: Client = Depends(get_db_connection)):
         "category": result["category"],
         "document": doc,
     })
-    # Save to PG and ChromaDB
     return result
 
+@app.get("/documents/")
+async def get_documents(db: Client = Depends(get_db_connection)):
+    try:
+        documents = await db.document.find_many()
+        return documents
+    except Exception as e:
+        print(f"Error fetching documents: {e}")
+        return {
+            "status": "error",
+            "message": "Failed to fetch documents from the database.",
+            "error_details" : str(e)
+        }
